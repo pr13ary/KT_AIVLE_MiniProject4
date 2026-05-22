@@ -5,4 +5,4 @@ dist
 .DS_Store
 
 # local API key (do not commit)
-src/api.txt
+api.txt

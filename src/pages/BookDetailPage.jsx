@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { getBook, updateBook, deleteBook, generateCover } from '../services/api'
-import apiTxt from '../api.txt?raw'
 import { label, greenBtn, redBtn, blueBtn, backBtnStyle, panel, inputStyle, selectStyle, dateStyle } from '../styles/bookDetailPageStyles'
 
 // ─── Constants ──────────────────────────────────────────────
@@ -15,13 +14,6 @@ const QUALITY_OPTIONS = [
   { value: 'medium', label: 'Medium' },
   { value: 'high',   label: 'High'   },
 ]
-
-const apiKeyFromFile = apiTxt
-  .split('\n')
-  .map(line => line.trim())
-  .find(line => line.startsWith('OPENAI_API_KEY='))
-  ?.split('=')[1]
-  .trim() || ''
 
 // ─── Toast ───────────────────────────────────────────────────
 function Toast({ msg, type }) {
@@ -39,7 +31,7 @@ export default function BookDetailPage() {
   const [pageError, setPageError] = useState(null)
 
   // AI generation state
-  const [apiKey,     setApiKey]     = useState(() => localStorage.getItem('openai_api_key') || apiKeyFromFile)
+  const [apiKey,     setApiKey]     = useState(() => localStorage.getItem('openai_api_key') || '')
   const [model,      setModel]      = useState('gpt-image-1')
   const [quality,    setQuality]    = useState('low')
   const [generating, setGenerating] = useState(false)
@@ -50,6 +42,31 @@ export default function BookDetailPage() {
   const showToast = useCallback((msg, type = 'success') => {
     setToast({ msg, type })
     setTimeout(() => setToast({ msg: '', type }), 3000)
+  }, [])
+
+  // ── 비동기로 public/api.txt에서 API KEY 가져오기 ──────────────────
+  useEffect(() => {
+    // 이미 로컬스토리지에 키가 있으면 굳이 파일 요청 안 함
+    if (localStorage.getItem('openai_api_key')) return
+
+    fetch('/api.txt')
+      .then(res => {
+        if (!res.ok) throw new Error('파일 없음')
+        return res.text()
+      })
+      .then(text => {
+        const key = text
+          .split('\n')
+          .map(line => line.trim())
+          .find(line => line.startsWith('OPENAI_API_KEY='))
+          ?.split('=')[1]
+          ?.trim()
+
+        if (key) setApiKey(key)
+      })
+      .catch(() => {
+        console.log('로컬에 로드할 public/api.txt 가 없거나 읽을 수 없습니다.')
+      })
   }, [])
 
   // ── Fetch book ───────────────────────────────────────────
@@ -82,7 +99,6 @@ export default function BookDetailPage() {
 
   // ── AI Cover Generation (8-step flow) ────────────────────
   async function handleGenerateCover() {
-    // ① API Key 유효성 검사
     if (!apiKey.trim()) {
       setGenError('OpenAI API Key를 입력해주세요.')
       return
@@ -92,15 +108,11 @@ export default function BookDetailPage() {
       return
     }
 
-    // API Key 로컬 저장
     localStorage.setItem('openai_api_key', apiKey)
     setGenError(null)
-
-    // ② 로딩 상태 ON – 버튼 비활성화 & '생성 중...' 표시
     setGenerating(true)
 
     try {
-      // ③ OpenAI 호출 → b64_json 추출 → Data URL 변환
       const imageUrl = await generateCover({
         apiKey,
         model,
@@ -109,17 +121,13 @@ export default function BookDetailPage() {
         description: book.description,
       })
 
-      // ④ json-server PATCH → coverImageUrl 저장
       await updateBook(id, { coverImageUrl: imageUrl })
-
-      // ⑤ 상태 갱신 → 화면에 표지 즉시 반영
       setBook(prev => ({ ...prev, coverImageUrl: imageUrl }))
       showToast('표지가 생성되었습니다! 🎨')
     } catch (err) {
       setGenError(err.message)
       showToast('표지 생성에 실패했습니다.', 'error')
     } finally {
-      // 로딩 상태 OFF
       setGenerating(false)
     }
   }
