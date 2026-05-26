@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { getBooks, deleteBook } from '../services/api'
+import { getBooks, deleteBook, updateBook } from '../services/api'
 import {
   page, headerRow, title, countText, primaryButton,
   searchWrapper, searchIcon, searchInput, clearButton,
@@ -51,6 +51,11 @@ function BookCard({ book, query, onDelete }) {
     await onDelete(book.id)
   }
 
+  const handleFavorite = async (e) => {
+    e.stopPropagation();
+    await onToggleFavorite(book)
+  }
+
   return (
     <div
       onClick={() => navigate(`/books/${book.id}`)}
@@ -72,6 +77,17 @@ function BookCard({ book, query, onDelete }) {
       </div>
 
       <div style={infoWrapper}>
+        <button onClick={handleFavorite}
+            style={{
+                alignSelf: 'flex-end',
+                border: 'none',
+                background: 'transparent',
+                fontSize: '22px',
+                cursor: 'pointer',
+                marginBottom: '4px',
+            }}
+        >{book.favorite ? '❤️' : '🤍'}</button>
+
         <div>
           <div style={infoTitle}>
             <Highlight text={book.title} query={query} />
